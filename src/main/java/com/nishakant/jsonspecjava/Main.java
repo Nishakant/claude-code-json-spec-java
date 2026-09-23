@@ -10,6 +10,7 @@ public class Main {
     public static void main(String[] args) throws IOException {
         if (args.length != 2) {
             System.err.println("Usage: java -jar <jar-file> <spec.json> <output-directory>");
+            System.err.println("       (arguments passed to this program: <spec.json> <output-directory>)");
             System.exit(1);
         }
 
@@ -34,8 +35,13 @@ public class Main {
 
     private static String extractPackageName(Map<String, String> sources) {
         return sources.values().stream()
-                .map(source -> source.split("\\R", 2)[0])
-                .map(line -> line.replace("package", "").replace(";", "").trim())
+                .map(source -> source.lines()
+                        .map(String::trim)
+                        .filter(line -> !line.isEmpty())
+                        .findFirst()
+                        .orElse(""))
+                .filter(line -> line.startsWith("package ") && line.endsWith(";"))
+                .map(line -> line.substring("package ".length(), line.length() - 1).trim())
                 .findFirst()
                 .orElse("generated");
     }

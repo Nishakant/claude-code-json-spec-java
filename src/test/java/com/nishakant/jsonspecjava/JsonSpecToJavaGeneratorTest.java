@@ -77,4 +77,34 @@ class JsonSpecToJavaGeneratorTest {
         assertTrue(sources.get("Customer").contains("private String email;"));
         assertTrue(sources.get("Item").contains("private Integer quantity;"));
     }
+
+    @Test
+    void defaultsAndSanitizesPackageName() throws IOException {
+        String specWithoutPackage = """
+                {
+                  "className": "Sample",
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"}
+                  }
+                }
+                """;
+
+        Map<String, String> defaultPackageSources = generator.generateSources(specWithoutPackage);
+        assertTrue(defaultPackageSources.get("Sample").contains("package generated;"));
+
+        String specWithInvalidPackage = """
+                {
+                  "package": "com.example.generated-v1",
+                  "className": "Sample",
+                  "type": "object",
+                  "properties": {
+                    "id": {"type": "string"}
+                  }
+                }
+                """;
+
+        Map<String, String> sanitizedPackageSources = generator.generateSources(specWithInvalidPackage);
+        assertTrue(sanitizedPackageSources.get("Sample").contains("package com.example.generated_v1;"));
+    }
 }

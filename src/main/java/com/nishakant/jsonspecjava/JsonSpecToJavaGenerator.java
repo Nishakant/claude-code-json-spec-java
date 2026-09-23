@@ -21,7 +21,7 @@ public class JsonSpecToJavaGenerator {
     }
 
     public Map<String, String> generateSources(JsonNode spec) {
-        String packageName = readText(spec, "package", "generated");
+        String packageName = sanitizePackageName(readText(spec, "package", "generated"));
         String rootClassName = toClassName(readText(spec, "className", readText(spec, "title", "GeneratedModel")));
 
         Map<String, String> sources = new LinkedHashMap<>();
@@ -175,6 +175,25 @@ public class JsonSpecToJavaGenerator {
     private static String toFieldName(String raw) {
         String className = toClassName(raw);
         return Character.toLowerCase(className.charAt(0)) + className.substring(1);
+    }
+
+    private static String sanitizePackageName(String rawPackage) {
+        String candidate = rawPackage == null || rawPackage.isBlank() ? "generated" : rawPackage.trim();
+        String[] parts = candidate.split("\\.");
+        List<String> sanitizedParts = new ArrayList<>();
+
+        for (String part : parts) {
+            String clean = part.replaceAll("[^A-Za-z0-9_]", "_");
+            if (clean.isEmpty()) {
+                continue;
+            }
+            if (!Character.isLetter(clean.charAt(0)) && clean.charAt(0) != '_') {
+                clean = "_" + clean;
+            }
+            sanitizedParts.add(clean.toLowerCase(Locale.ROOT));
+        }
+
+        return sanitizedParts.isEmpty() ? "generated" : String.join(".", sanitizedParts);
     }
 
     private static String singularize(String name) {
