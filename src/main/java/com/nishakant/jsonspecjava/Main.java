@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Map;
 
 public class Main {
     public static void main(String[] args) throws IOException {
@@ -19,30 +18,19 @@ public class Main {
 
         String spec = Files.readString(specPath, StandardCharsets.UTF_8);
         JsonSpecToJavaGenerator generator = new JsonSpecToJavaGenerator();
-        Map<String, String> sources = generator.generateSources(spec);
+        JsonSpecToJavaGenerator.GenerationResult generation = generator.generate(spec);
 
-        String packageName = extractPackageName(sources);
-        Path packageDir = outputDir.resolve(packageName.replace('.', '/'));
+        Path packageDir = outputDir;
+        for (String segment : generation.packageName().split("\\.")) {
+            packageDir = packageDir.resolve(segment);
+        }
         Files.createDirectories(packageDir);
 
-        for (Map.Entry<String, String> entry : sources.entrySet()) {
+        for (var entry : generation.sources().entrySet()) {
             Path outputFile = packageDir.resolve(entry.getKey() + ".java");
             Files.writeString(outputFile, entry.getValue(), StandardCharsets.UTF_8);
         }
 
-        System.out.printf("Generated %d file(s) in %s%n", sources.size(), packageDir.toAbsolutePath());
-    }
-
-    private static String extractPackageName(Map<String, String> sources) {
-        return sources.values().stream()
-                .map(source -> source.lines()
-                        .map(String::trim)
-                        .filter(line -> !line.isEmpty())
-                        .findFirst()
-                        .orElse(""))
-                .filter(line -> line.startsWith("package ") && line.endsWith(";"))
-                .map(line -> line.substring("package ".length(), line.length() - 1).trim())
-                .findFirst()
-                .orElse("generated");
+        System.out.printf("Generated %d file(s) in %s%n", generation.sources().size(), packageDir.toAbsolutePath());
     }
 }

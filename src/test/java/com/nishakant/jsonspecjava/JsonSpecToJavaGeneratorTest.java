@@ -95,7 +95,7 @@ class JsonSpecToJavaGeneratorTest {
 
         String specWithInvalidPackage = """
                 {
-                  "package": "com.example.generated-v1",
+                  "package": "com.int.generated-v1",
                   "className": "Sample",
                   "type": "object",
                   "properties": {
@@ -105,7 +105,7 @@ class JsonSpecToJavaGeneratorTest {
                 """;
 
         Map<String, String> sanitizedPackageSources = generator.generateSources(specWithInvalidPackage);
-        assertTrue(sanitizedPackageSources.get("Sample").contains("package com.example.generated_v1;"));
+        assertTrue(sanitizedPackageSources.get("Sample").contains("package com._int.generated_v1;"));
     }
 
     @Test
@@ -147,5 +147,39 @@ class JsonSpecToJavaGeneratorTest {
         assertTrue(sources.get("Shipping").contains("private ShippingAddress address;"));
         assertTrue(sources.get("Address").contains("private String line1;"));
         assertTrue(sources.get("ShippingAddress").contains("private String postalCode;"));
+    }
+
+    @Test
+    void avoidsRootNameCollisionsAndHandlesIesPluralArrays() throws IOException {
+        String spec = """
+                {
+                  "className": "Order",
+                  "type": "object",
+                  "properties": {
+                    "order": {
+                      "type": "object",
+                      "properties": {
+                        "URL_value": {"type": "string"}
+                      }
+                    },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {"type": "string"}
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+
+        Map<String, String> sources = generator.generateSources(spec);
+
+        assertTrue(sources.get("Order").contains("private OrderOrder order;"));
+        assertTrue(sources.get("Order").contains("private List<Category> categories;"));
+        assertTrue(sources.get("OrderOrder").contains("private String urlValue;"));
+        assertTrue(sources.get("Category").contains("private String name;"));
     }
 }

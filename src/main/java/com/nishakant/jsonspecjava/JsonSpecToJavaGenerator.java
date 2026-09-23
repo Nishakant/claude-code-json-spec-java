@@ -14,25 +14,42 @@ import java.util.Set;
 
 public class JsonSpecToJavaGenerator {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final Set<String> JAVA_KEYWORDS = Set.of(
+            "abstract", "assert", "boolean", "break", "byte", "case", "catch", "char", "class", "const",
+            "continue", "default", "do", "double", "else", "enum", "extends", "final", "finally", "float",
+            "for", "goto", "if", "implements", "import", "instanceof", "int", "interface", "long", "native",
+            "new", "package", "private", "protected", "public", "return", "short", "static", "strictfp",
+            "super", "switch", "synchronized", "this", "throw", "throws", "transient", "try", "void",
+            "volatile", "while"
+    );
 
     public Map<String, String> generateSources(String specJson) throws IOException {
+        return generate(specJson).sources();
+    }
+
+    public GenerationResult generate(String specJson) throws IOException {
         JsonNode spec = OBJECT_MAPPER.readTree(specJson);
-        return generateSources(spec);
+        return generate(spec);
     }
 
     public Map<String, String> generateSources(JsonNode spec) {
+        return generate(spec).sources();
+    }
+
+    public GenerationResult generate(JsonNode spec) {
         String packageName = sanitizePackageName(readText(spec, "package", "generated"));
         String rootClassName = toClassName(readText(spec, "className", readText(spec, "title", "GeneratedModel")));
 
         Map<String, String> sources = new LinkedHashMap<>();
         processClass(rootClassName, propertyNode(spec), packageName, sources);
-        return sources;
+        return new GenerationResult(packageName, sources);
     }
 
     private void processClass(String className, JsonNode properties, String packageName, Map<String, String> sources) {
         if (sources.containsKey(className)) {
             return;
         }
+        sources.put(className, null);
 
         List<FieldSpec> fields = new ArrayList<>();
         Set<String> imports = new LinkedHashSet<>();
@@ -176,7 +193,7 @@ public class JsonSpecToJavaGenerator {
 
     private static String toFieldName(String raw) {
         String className = toClassName(raw);
-        return Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        return toLowerCamelCase(className);
     }
 
     private static String sanitizePackageName(String rawPackage) {
@@ -192,6 +209,9 @@ public class JsonSpecToJavaGenerator {
             if (!Character.isLetter(clean.charAt(0)) && clean.charAt(0) != '_') {
                 clean = "_" + clean;
             }
+            if (JAVA_KEYWORDS.contains(clean.toLowerCase(Locale.ROOT))) {
+                clean = "_" + clean;
+            }
             sanitizedParts.add(clean.toLowerCase(Locale.ROOT));
         }
 
@@ -199,6 +219,9 @@ public class JsonSpecToJavaGenerator {
     }
 
     private static String singularize(String name) {
+        if (name.endsWith("ies") && name.length() > 3) {
+            return name.substring(0, name.length() - 3) + "y";
+        }
         return name.endsWith("s") && name.length() > 1 ? name.substring(0, name.length() - 1) : name;
     }
 
@@ -219,6 +242,32 @@ public class JsonSpecToJavaGenerator {
         }
         return ownerScoped + index;
     }
+
+    private static String toLowerCamelCase(String className) {
+        if (className.length() == 1) {
+            return className.toLowerCase(Locale.ROOT);
+        }
+
+        int boundary = -1;
+        for (int i = 0; i < className.length() - 1; i++) {
+            if (Character.isUpperCase(className.charAt(i)) && Character.isLowerCase(className.charAt(i + 1))) {
+                boundary = i;
+                break;
+            }
+        }
+
+        if (boundary == -1) {
+            return className.toLowerCase(Locale.ROOT);
+        }
+
+        if (boundary == 0) {
+            return Character.toLowerCase(className.charAt(0)) + className.substring(1);
+        }
+
+        return className.substring(0, boundary).toLowerCase(Locale.ROOT) + className.substring(boundary);
+    }
+
+    public record GenerationResult(String packageName, Map<String, String> sources) {}
 
     private record FieldSpec(String name, String type) {}
 
