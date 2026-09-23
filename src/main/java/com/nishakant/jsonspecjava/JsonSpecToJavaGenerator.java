@@ -41,7 +41,7 @@ public class JsonSpecToJavaGenerator {
             properties.fields().forEachRemaining(entry -> {
                 String fieldName = toFieldName(entry.getKey());
                 JsonNode fieldSpec = entry.getValue();
-                FieldType fieldType = resolveType(entry.getKey(), fieldSpec, packageName, sources, imports);
+                FieldType fieldType = resolveType(className, entry.getKey(), fieldSpec, packageName, sources, imports);
                 fields.add(new FieldSpec(fieldName, fieldType.typeName));
             });
         }
@@ -49,7 +49,8 @@ public class JsonSpecToJavaGenerator {
         sources.put(className, renderClass(packageName, className, fields, imports));
     }
 
-    private FieldType resolveType(String propertyName,
+    private FieldType resolveType(String ownerClassName,
+                                  String propertyName,
                                   JsonNode fieldSpec,
                                   String packageName,
                                   Map<String, String> sources,
@@ -64,13 +65,13 @@ public class JsonSpecToJavaGenerator {
             case "array" -> {
                 imports.add("java.util.List");
                 JsonNode items = fieldSpec.path("items");
-                FieldType itemType = resolveArrayItemType(propertyName, items, packageName, sources, imports);
+                FieldType itemType = resolveArrayItemType(ownerClassName, propertyName, items, packageName, sources, imports);
                 yield new FieldType("List<" + itemType.typeName + ">", true);
             }
             case "object" -> {
                 JsonNode nestedProperties = propertyNode(fieldSpec);
                 if (nestedProperties != null && nestedProperties.isObject()) {
-                    String nestedClassName = toClassName(propertyName);
+                    String nestedClassName = uniqueClassName(propertyName, ownerClassName, sources);
                     processClass(nestedClassName, nestedProperties, packageName, sources);
                     yield new FieldType(nestedClassName);
                 }
@@ -80,7 +81,8 @@ public class JsonSpecToJavaGenerator {
         };
     }
 
-    private FieldType resolveArrayItemType(String propertyName,
+    private FieldType resolveArrayItemType(String ownerClassName,
+                                           String propertyName,
                                            JsonNode itemSpec,
                                            String packageName,
                                            Map<String, String> sources,
@@ -91,12 +93,12 @@ public class JsonSpecToJavaGenerator {
 
         String itemType = readText(itemSpec, "type", "object").toLowerCase(Locale.ROOT);
         if ("object".equals(itemType) && propertyNode(itemSpec) != null) {
-            String nestedName = toClassName(singularize(propertyName));
+            String nestedName = uniqueClassName(singularize(propertyName), ownerClassName, sources);
             processClass(nestedName, propertyNode(itemSpec), packageName, sources);
             return new FieldType(nestedName);
         }
 
-        return resolveType(propertyName, itemSpec, packageName, sources, imports);
+        return resolveType(ownerClassName, propertyName, itemSpec, packageName, sources, imports);
     }
 
     private static JsonNode propertyNode(JsonNode node) {
@@ -198,6 +200,24 @@ public class JsonSpecToJavaGenerator {
 
     private static String singularize(String name) {
         return name.endsWith("s") && name.length() > 1 ? name.substring(0, name.length() - 1) : name;
+    }
+
+    private static String uniqueClassName(String rawName, String ownerClassName, Map<String, String> sources) {
+        String baseName = toClassName(rawName);
+        if (!sources.containsKey(baseName)) {
+            return baseName;
+        }
+
+        String ownerScoped = toClassName(ownerClassName + " " + rawName);
+        if (!sources.containsKey(ownerScoped)) {
+            return ownerScoped;
+        }
+
+        int index = 2;
+        while (sources.containsKey(ownerScoped + index)) {
+            index++;
+        }
+        return ownerScoped + index;
     }
 
     private record FieldSpec(String name, String type) {}

@@ -107,4 +107,45 @@ class JsonSpecToJavaGeneratorTest {
         Map<String, String> sanitizedPackageSources = generator.generateSources(specWithInvalidPackage);
         assertTrue(sanitizedPackageSources.get("Sample").contains("package com.example.generated_v1;"));
     }
+
+    @Test
+    void generatesUniqueNamesForCollidingNestedTypes() throws IOException {
+        String spec = """
+                {
+                  "className": "Order",
+                  "type": "object",
+                  "properties": {
+                    "billing": {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "object",
+                          "properties": {
+                            "line1": {"type": "string"}
+                          }
+                        }
+                      }
+                    },
+                    "shipping": {
+                      "type": "object",
+                      "properties": {
+                        "address": {
+                          "type": "object",
+                          "properties": {
+                            "postalCode": {"type": "string"}
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                """;
+
+        Map<String, String> sources = generator.generateSources(spec);
+
+        assertTrue(sources.get("Billing").contains("private Address address;"));
+        assertTrue(sources.get("Shipping").contains("private ShippingAddress address;"));
+        assertTrue(sources.get("Address").contains("private String line1;"));
+        assertTrue(sources.get("ShippingAddress").contains("private String postalCode;"));
+    }
 }
